@@ -1,0 +1,253 @@
+package com.example.gotowanieztelefonem4
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import androidx.navigation.compose.*
+import kotlinx.coroutines.delay
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            GotowanieZTelefonemApp()
+        }
+    }
+}
+
+@Composable
+fun GotowanieZTelefonemApp() {
+    val navController = rememberNavController()
+    NavHost(navController = navController, startDestination = "screen0") {
+        composable("screen0") { Screen0(navController) }
+        composable("screen1") { Screen1(navController) }
+        composable("steps/{dishName}") { backStackEntry ->
+            val dishName = backStackEntry.arguments?.getString("dishName") ?: ""
+            val recipe = RecipesData.recipes.find { it.name == dishName }
+            recipe?.let {
+                StepByStepScreen(it, navController)
+            }
+        }
+    }
+}
+
+@Composable
+fun Screen0(navController: NavController) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Text(text = "Gotowanie z telefonem", style = MaterialTheme.typography.headlineMedium)
+
+            Button(onClick = { navController.navigate("screen1") }, modifier = Modifier.fillMaxWidth()) {
+                Text("Rozpocznij")
+            }
+
+            Button(onClick = {
+                val randomDish = RecipesData.recipes.random().name
+                navController.navigate("steps/$randomDish")
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text("Danie dnia")
+            }
+        }
+    }
+}
+
+fun String.normalize(): String {
+    val map = mapOf(
+        'ą' to 'a', 'ć' to 'c', 'ę' to 'e', 'ł' to 'l', 'ń' to 'n',
+        'ó' to 'o', 'ś' to 's', 'ź' to 'z', 'ż' to 'z',
+        'Ą' to 'A', 'Ć' to 'C', 'Ę' to 'E', 'Ł' to 'L', 'Ń' to 'N',
+        'Ó' to 'O', 'Ś' to 'S', 'Ź' to 'Z', 'Ż' to 'Z'
+    )
+    return this.map { map[it] ?: it }.joinToString("").lowercase()
+}
+
+@Composable
+fun Screen1(navController: NavController) {
+    var nameQuery by remember { mutableStateOf("") }
+    var tagQuery by remember { mutableStateOf("") }
+
+    val filteredRecipes = RecipesData.recipes.filter { recipe ->
+        val nameMatches = recipe.name.normalize().startsWith(nameQuery.normalize())
+        val tagMatches = if (tagQuery.isBlank()) true else recipe.tags.any { it.normalize() == tagQuery.normalize() }
+        nameMatches && tagMatches
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        OutlinedTextField(
+            value = nameQuery,
+            onValueChange = { nameQuery = it },
+            label = { Text("Szukaj nazwy potrawy") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = tagQuery,
+            onValueChange = { tagQuery = it },
+            label = { Text("Szukaj tagu (dokładnie)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        filteredRecipes.forEach { dish ->
+            Text(text = dish.name, style = MaterialTheme.typography.bodyLarge)
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                dish.tags.forEach { tag -> Chip(tag) }
+            }
+
+            Button(
+                onClick = { navController.navigate("steps/${dish.name}") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Czas gotować!")
+            }
+        }
+    }
+}
+
+@Composable
+fun StepByStepScreen(recipe: Recipe, navController: NavController) {
+    var currentStepIndex by remember { mutableStateOf(0) }
+    val currentStep = recipe.steps.getOrNull(currentStepIndex)
+
+    var timeLeft by remember { mutableStateOf(currentStep?.timeInSeconds ?: 0) }
+    var isTimerRunning by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isTimerRunning, currentStepIndex) {
+        if (isTimerRunning && timeLeft > 0) {
+            while (timeLeft > 0) {
+                delay(1000L)
+                timeLeft--
+            }
+        }
+    }
+
+    val backgroundImageResId = when (recipe.name) {
+        "Spaghetti Bolognese" -> R.drawable.spaghetti_bolognese
+        "Sałatka Grecka" -> R.drawable.salatka_grecka
+        "Pizza Margherita" -> R.drawable.pizza_margherita
+        "Zupa Pomidorowa" -> R.drawable.zupa_pomidorowa
+        "Tacos" -> R.drawable.tacos
+        "Pierogi z Kapustą" -> R.drawable.pierogi_z_kapusta
+        "Risotto" -> R.drawable.risotto
+        else -> R.drawable.default_image
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = backgroundImageResId),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color.Black),
+                        startY = 300f
+                    )
+                )
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Krok ${currentStepIndex + 1}/${recipe.steps.size}", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+
+            currentStep?.let {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                        .padding(16.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(it.description, style = MaterialTheme.typography.bodyLarge, color = Color.Black)
+
+                        if (it.timeInSeconds > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Pozostały czas: ${timeLeft}s", style = MaterialTheme.typography.bodyMedium, color = Color.Black)
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { isTimerRunning = true }) { Text("Start") }
+                                Button(onClick = {
+                                    isTimerRunning = false
+                                    timeLeft = it.timeInSeconds
+                                }) { Text("Reset") }
+                            }
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        if (currentStepIndex < recipe.steps.size - 1) {
+                            currentStepIndex++
+                            timeLeft = recipe.steps[currentStepIndex].timeInSeconds
+                            isTimerRunning = false
+                        } else {
+                            navController.popBackStack()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (currentStepIndex < recipe.steps.size - 1) "Następny krok" else "Zakończ")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun Chip(tag: String) {
+    Surface(
+        modifier = Modifier.padding(4.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = Color.LightGray
+    ) {
+        Text(
+            text = tag,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(8.dp),
+            color = Color.Black
+        )
+    }
+}
